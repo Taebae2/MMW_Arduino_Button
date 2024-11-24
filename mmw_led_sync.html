@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LED Color Sync</title>
+    <style>
+        body {
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-family: Arial, sans-serif;
+            transition: background-color 0.5s ease; /* Smooth transition for color changes */
+        }
+        h1 {
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #007BFF;
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>LED Color Sync</h1>
+    <button id="connectButton">Connect to Arduino</button>
+    <p id="status">Click "Connect to Arduino" to start syncing colors.</p>
+
+    <script>
+        let port;
+        let reader;
+
+        // When the user clicks the button to connect
+        document.getElementById('connectButton').addEventListener('click', async () => {
+            try {
+                // Update status message
+                document.getElementById('status').textContent = "Requesting access to serial port...";
+
+                // Request access to the serial port
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+
+                // Update status message
+                document.getElementById('status').textContent = "Connected! Waiting for data...";
+
+                // Start reading data from Arduino
+                reader = port.readable.getReader();
+                readData();
+            } catch (error) {
+                console.error("Failed to connect:", error);
+                document.getElementById('status').textContent = `Error: ${error.message}`;
+            }
+        });
+
+        // Read data from Arduino and update background color
+        async function readData() {
+            const decoder = new TextDecoder();
+            let buffer = ""; // Buffer to handle partial data
+
+            while (true) {
+                try {
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        reader.releaseLock();
+                        document.getElementById('status').textContent = "Connection closed.";
+                        break;
+                    }
+
+                    // Decode incoming data and append to buffer
+                    buffer += decoder.decode(value);
+
+                    // Check for complete commands (assume commands end with a newline)
+                    let lines = buffer.split("\n");
+                    buffer = lines.pop(); // Save any incomplete line back to buffer
+
+                    for (let line of lines) {
+                        const data = line.trim().toLowerCase(); // Trim and normalize
+
+                        console.log("Received:", data);
+
+                        // Change background color based on serial data
+                        if (data === "green") {
+                            document.body.style.backgroundColor = "green";
+                            document.getElementById('status').textContent = "Background color: Green";
+                        } else if (data === "red") {
+                            document.body.style.backgroundColor = "red";
+                            document.getElementById('status').textContent = "Background color: Red";
+                        } else {
+                            console.warn("Unknown data received:", data);
+                            document.getElementById('status').textContent = `Unknown color: ${data}`;
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error reading from serial port:", error);
+                    document.getElementById('status').textContent = `Error: ${error.message}`;
+                    break;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
